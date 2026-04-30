@@ -1,0 +1,335 @@
+{
+  "name": "Criar Meta Firestore",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\n\nconst categoriasValidas = ['faculdade', 'negocio', 'bemestar'];\nconst prioridadesValidas = ['alta', 'media', 'baixa'];\nconst erros = [];\n\nif (!input.userId) erros.push('user_id obrigatorio');\nif (!categoriasValidas.includes(input.categoria)) erros.push(`categoria invalida: \"${input.categoria}\" — use faculdade, negocio ou bemestar`);\nif (!prioridadesValidas.includes(input.prioridade)) erros.push(`prioridade invalida: \"${input.prioridade}\" — use alta, media ou baixa`);\n\nlet prazoISO = null;\nif (input.prazo) {\n  const prazoStr = input.prazo.includes('T') ? input.prazo : `${input.prazo}T12:00:00-03:00`;\n  const d = new Date(prazoStr);\n  if (isNaN(d.getTime())) erros.push(`prazo invalido: \"${input.prazo}\" — use YYYY-MM-DD`);\n  else prazoISO = d.toISOString();\n}\n\nif (erros.length > 0) {\n  return [{ json: { sucesso: false, mensagem: `Falha: ${erros.join('; ')}` } }];\n}\n\nconst agora = new Date().toISOString();\n\nreturn [{\n  json: {\n    sucesso: true,\n    documento: {\n      userId:    input.user_id,\n      tituloMeta:     input.titulo,\n      descricao:  input.descricao || '',\n      tag:  input.categoria,\n      prioridade: input.prioridade,\n      status:     'ativa',\n      progresso:  0,\n      prazo:      prazoISO,\n      dataCriacao: agora,\n      dataAtualizacao: agora\n    },\n    resumo: {\n      titulo:     input.titulo,\n      tag:  input.categoria,\n      prioridade: input.prioridade\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -144,
+        448
+      ],
+      "id": "a0cec8b9-c051-4085-9867-e1bff98dbe86",
+      "name": "Valida e normaliza"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-01",
+              "leftValue": "={{ $json.sucesso }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        96,
+        448
+      ],
+      "id": "747fbb30-593e-420b-bf14-60504a355840",
+      "name": "Valido?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "resp-01",
+              "name": "sucesso",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "resp-02",
+              "name": "meta_id",
+              "value": "={{ $json.name.split('/').pop() }}",
+              "type": "string"
+            },
+            {
+              "id": "resp-03",
+              "name": "mensagem",
+              "value": "=Meta \"{{ $('Valida e normaliza').item.json.resumo.titulo }}\" criada com sucesso.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        784,
+        336
+      ],
+      "id": "aa14885f-7cb5-4a9e-8935-5a42440e310f",
+      "name": "Resposta sucesso"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "err-01",
+              "name": "sucesso",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "err-02",
+              "name": "mensagem",
+              "value": "={{ $json.mensagem }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        336,
+        560
+      ],
+      "id": "da01363a-c547-4df9-aacd-1442390f7500",
+      "name": "Resposta erro"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "userId"
+            },
+            {
+              "name": "tituloMeta"
+            },
+            {
+              "name": "descricao"
+            },
+            {
+              "name": "categoria"
+            },
+            {
+              "name": "prioridade"
+            },
+            {
+              "name": "prazo"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -384,
+        448
+      ],
+      "id": "a622fa3c-395e-48f9-add3-b8f60bbb8523",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "projectId": "alba-1e168",
+        "collection": "Metas",
+        "columns": "userId,tituloMeta,descricao,tag,prioridade,status,progresso,prazo,dataCriacao,dataAtualizacao",
+        "simple": false
+      },
+      "type": "n8n-nodes-base.googleFirebaseCloudFirestore",
+      "typeVersion": 1.1,
+      "position": [
+        560,
+        336
+      ],
+      "id": "5b73d8d4-2fef-4b84-823d-71f47f03c3d6",
+      "name": "Create a document",
+      "credentials": {
+        "googleFirebaseCloudFirestoreOAuth2Api": {
+          "id": "ymvhjRpIIFNIGvGB",
+          "name": "Google Firebase Cloud Firestore account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "907ff33e-af46-4e63-a264-e6e2480c7012",
+              "name": "userId",
+              "value": "={{ $('When Executed by Another Workflow').item.json.userId }}",
+              "type": "string"
+            },
+            {
+              "id": "22cd9222-6bda-496f-a467-308da78bcc28",
+              "name": "tituloMeta",
+              "value": "={{ $('When Executed by Another Workflow').item.json.tituloMeta }}",
+              "type": "string"
+            },
+            {
+              "id": "aa8df716-1cb1-42fe-a614-357b441396d1",
+              "name": "descricao",
+              "value": "={{ $json.documento.descricao }}",
+              "type": "string"
+            },
+            {
+              "id": "e852336a-b6ee-465a-94ff-0c23d5f590a5",
+              "name": "tag",
+              "value": "={{ $('When Executed by Another Workflow').item.json.categoria }}",
+              "type": "string"
+            },
+            {
+              "id": "d534116e-9701-46bf-8553-b79995d272d6",
+              "name": "prioridade",
+              "value": "={{ $json.documento.prioridade }}",
+              "type": "string"
+            },
+            {
+              "id": "6fc785a0-6a7d-4541-8fca-281992ea5fbc",
+              "name": "status",
+              "value": "={{ $json.documento.status }}",
+              "type": "string"
+            },
+            {
+              "id": "c9c1b8e8-f570-46a3-8f8e-c00265f57016",
+              "name": "progresso",
+              "value": "={{ $json.documento.progresso }}",
+              "type": "string"
+            },
+            {
+              "id": "b433a923-ed12-4162-a52b-cdc5f364e9c0",
+              "name": "prazo",
+              "value": "={{ $json.documento.prazo }}",
+              "type": "string"
+            },
+            {
+              "id": "87023482-3170-4093-af7f-39009143f46c",
+              "name": "dataCriacao",
+              "value": "={{ $json.documento.dataCriacao}}",
+              "type": "string"
+            },
+            {
+              "id": "44a9dfa3-c665-4397-8639-fc5699a97840",
+              "name": "dataAtualizacao",
+              "value": "={{ $json.documento.dataAtualizacao }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        336,
+        336
+      ],
+      "id": "ae4e63c9-3b02-4740-9ea2-0945701fbf8f",
+      "name": "Edit Fields"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Valida e normaliza": {
+      "main": [
+        [
+          {
+            "node": "Valido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valido?": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resposta erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Valida e normaliza",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a document": {
+      "main": [
+        [
+          {
+            "node": "Resposta sucesso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Create a document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "28e3bb6d-09ad-46e1-841c-7d90276b6e67",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a0e9a37c10519fc451dec97eefe285ad1a2ae1eb86c7231b24ef90a2a3b99e9b"
+  },
+  "id": "1DjEC9VtJKQPaiPS",
+  "tags": [
+    {
+      "updatedAt": "2026-03-03T14:12:32.490Z",
+      "createdAt": "2026-03-03T14:12:32.490Z",
+      "id": "CjdjHOaM4Uf4iwR4",
+      "name": "tool"
+    }
+  ]
+}
