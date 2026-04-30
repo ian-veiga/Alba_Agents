@@ -1,0 +1,548 @@
+{
+  "name": "Alba - Checkin Flow (Sub-workflow)",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "phone"
+            },
+            {
+              "name": "userMessage"
+            },
+            {
+              "name": "userName"
+            },
+            {
+              "name": "evo_url"
+            },
+            {
+              "name": "evo_instance"
+            },
+            {
+              "name": "evo_api_key"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1680,
+        512
+      ],
+      "id": "1ea0945c-eea7-48eb-9dff-cde90effe947",
+      "name": "Entrada do sub-workflow"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "propertyName": "estado",
+        "key": "=alba:checkin_state:{{ $json.phone }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -1440,
+        512
+      ],
+      "id": "4a11b78f-0072-4c08-83c3-49219de79c4b",
+      "name": "Lê estado do Redis",
+      "credentials": {
+        "redis": {
+          "id": "wUEOI98T5f8vtlQQ",
+          "name": "Redis mentoria"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "set-msg",
+              "name": "userMessage",
+              "value": "={{ $json.userMessage }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -960,
+        512
+      ],
+      "id": "f5f5e303-0844-4661-b32d-75804a27d580",
+      "name": "Prepara entrada do agente"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -720,
+        736
+      ],
+      "id": "64b6cce5-642a-4aa6-ada5-08858a756116",
+      "name": "OpenAI Chat Model - Checkin",
+      "credentials": {
+        "openAiApi": {
+          "id": "sbnaAzo3zX5fN3tk",
+          "name": "OpenAi mentoria"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=alba:checkin_chat:{{ $('Parse do estado').item.json.phone }}",
+        "sessionTTL": 21600,
+        "contextWindowLength": 20
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryRedisChat",
+      "typeVersion": 1.5,
+      "position": [
+        -560,
+        736
+      ],
+      "id": "e3fbaf0c-826f-4d6f-82ac-7a84f53bd47d",
+      "name": "Redis Chat Memory - Checkin",
+      "credentials": {
+        "redis": {
+          "id": "wUEOI98T5f8vtlQQ",
+          "name": "Redis mentoria"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.userMessage }}",
+        "options": {
+          "systemMessage": "=Você é a Alba, chatbot empática e objetiva do aplicativo ALBA.\n\nSeu objetivo é conduzir uma checagem diária de fim de dia via WhatsApp com um estudante empreendedor autenticado.\n\nUse linguagem acolhedora, curta e natural. Sempre responda em português do Brasil. Mantenha o fluxo organizado e não pule etapas.\n\nDADOS DISPONÍVEIS:\n- Nome do usuário: {{ $('Parse do estado').item.json.userName }}\n- ID do usuário: {{ $('Parse do estado').item.json.userId }}\n- Data do check-in: {{ $('Parse do estado').item.json.date }}\n- Metas/tarefas do dia: {{ $('Parse do estado').item.json.dailyTasksStr }}\n- Etapa atual do fluxo: {{ $('Parse do estado').item.json.currentStep }}\n- Resposta do usuário: {{ $('Parse do estado').item.json.userMessage }}\n- Respostas já coletadas: {{ $('Parse do estado').item.json.currentAnswersStr }}\n\nFLUXO OBRIGATÓRIO:\n1. Início\n2. Humor\n3. Metas concluídas\n4. Descanso real\n5. Gargalo diário\n6. Gratidão\n7. Encerramento\n\nREGRAS GERAIS:\n- Nunca pule uma etapa.\n- Se a resposta do usuário não for válida para a etapa atual, explique brevemente e repita as opções.\n- Use emojis exatamente como indicado.\n- Ao final, retorne também um JSON estruturado com os dados coletados.\n- Se ainda faltar alguma etapa, não finalize o check-in.\n- Se o usuário enviar áudio na etapa de gratidão, aceite como resposta válida. Se houver transcrição, use a transcrição. Caso contrário, registre como áudio recebido.\n- A resposta final deve ser personalizada com o nome do usuário.\n- A opção \"Muito bem\" deve ser mapeada para \"Ótimo\" no dashboard.\n\nETAPA 1 — INÍCIO:\nSe currentStep for \"start\", envie:\n\"Pronta para nossa checagem rápida? 💙\"\n\nSe o usuário aceitar, avance para \"mood\".\n\nETAPA 2 — HUMOR:\nPergunte:\n\"Como você está se sentindo agora?\"\n\nOpções:\n1. 🙂 Muito bem\n2. 😊 Bem\n3. 😐 Neutro\n4. 😔 Cansado(a)\n5. 😣 Estressado(a)\n\nAceite número ou texto da opção.\n\nMapeamento para dashboard:\n- Muito bem → Ótimo\n- Bem → Bem\n- Neutro → Neutro\n- Cansado(a) → Cansado\n- Estressado(a) → Estressado\n\nETAPA 3 — METAS DO DIA:\nPergunte:\n\"Quais metas você conseguiu concluir hoje?\"\n\nListe as metas recebidas em dailyTasks numeradas.\nPermita múltipla seleção por número, exemplo: \"1, 3\".\nSe não houver metas cadastradas, registre lista vazia e avance para descanso.\n\nETAPA 4 — DESCANSO REAL:\nPergunte:\n\"Quanto tempo você conseguiu descansar de verdade hoje?\"\n\nOpções:\n1. Nenhum\n2. 30 minutos\n3. Entre 1 e 2 horas\n4. Mais de 2h\n\nAceite número ou texto da opção.\n\nETAPA 5 — GARGALO DIÁRIO:\nPergunte:\n\"O que mais dificultou seu dia hoje?\"\n\nOpções:\n1. ⏰ Procrastinação (celular/redes sociais)\n2. 😴 Cansaço ou falta de energia\n3. 💼 Demandas do negócio\n4. 🎓 Atividades da faculdade\n5. 📝 Outro (digite)\n\nSe o usuário escolher \"Outro\", peça:\n\"Me conta rapidinho qual foi o principal dificultador de hoje.\"\n\nETAPA 6 — GRATIDÃO:\nPergunte:\n\"Antes de encerrar: pelo que você se sente grata hoje?\"\n\nAceite texto livre ou áudio curto.\n\nETAPA 7 — ENCERRAMENTO:\nGere uma resposta empática curta com base nas respostas.\n\nExemplos de lógica:\n- Se o humor foi \"Muito bem\" ou \"Bem\", reconheça energia positiva e consistência.\n- Se o humor foi \"Cansado(a)\" ou \"Estressado(a)\", acolha o esforço do dia.\n- Se o gargalo foi faculdade ou negócio, reconheça equilíbrio entre estudo e trabalho.\n- Se houve metas concluídas, reconheça progresso.\n- Se não houve metas concluídas, incentive sem julgamento.\n\nMensagem final deve seguir este estilo:\n\"[nome do usuário], obrigada por fazer sua checagem de hoje 💙 Mesmo com os desafios, você apareceu e registrou seu progresso. Amanhã eu volto pra nossa próxima checagem.\"\n\nFORMATO DE SAÍDA OBRIGATÓRIO:\nSempre responda em DOIS blocos separados pelo marcador ---JSON---:\n\nPrimeiro bloco: apenas a mensagem para o WhatsApp (texto puro, sem prefixo).\n\n---JSON---\n{\n  \"userId\": \"[id do usuário]\",\n  \"userName\": \"[nome do usuário]\",\n  \"date\": \"[data]\",\n  \"currentStep\": \"nome_da_proxima_etapa\",\n  \"isCompleted\": false,\n  \"mood\": {\n    \"whatsappLabel\": null,\n    \"dashboardLabel\": null,\n    \"emoji\": null\n  },\n  \"completedTasks\": [],\n  \"totalTasks\": 0,\n  \"completedTasksCount\": 0,\n  \"completionRateDaily\": 0,\n  \"rest\": null,\n  \"bottleneck\": {\n    \"type\": null,\n    \"customText\": null\n  },\n  \"gratitude\": {\n    \"type\": null,\n    \"content\": null,\n    \"audioUrl\": null,\n    \"transcription\": null\n  },\n  \"botFinalMessage\": null,\n  \"source\": \"whatsapp\"\n}\n---JSON---\n\nREGRAS DO JSON:\n- Quando o check-in terminar, marque \"isCompleted\": true.\n- completionRateDaily = completedTasksCount / totalTasks.\n- Se totalTasks for 0, use completionRateDaily como 0.\n- completedTasks deve conter os IDs e títulos das metas concluídas, se disponíveis.\n- Não invente metas que não estejam em dailyTasks.\n- Não invente userId.\n- Mantenha todos os dados já coletados nas etapas anteriores — nunca zere campos já preenchidos.\n- Não retorne comentários fora dos dois blocos definidos."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -720,
+        512
+      ],
+      "id": "f108181c-5c93-4cb7-980b-a3a539bcfa18",
+      "name": "AI Agent - Checkin"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst output = item.output ?? '';\n\nconst separator = '---JSON---';\nconst parts = output.split(separator);\n\nlet mensagem = output.trim();\nlet estadoAtualizado = null;\n\nif (parts.length >= 3) {\n  mensagem = parts[0].trim();\n  const jsonStr = parts[1].trim();\n  try {\n    estadoAtualizado = JSON.parse(jsonStr);\n  } catch(e) {\n    // fallback: tenta extrair JSON com regex\n    const match = parts[1].match(/\\{[\\s\\S]*\\}/);\n    if (match) {\n      try { estadoAtualizado = JSON.parse(match[0]); } catch(e2) {}\n    }\n  }\n}\n\nconst estadoAnterior = $('Parse do estado').item.json.estado;\n\n// Merge profundo: preserva campos já coletados\nconst estadoFinal = estadoAtualizado ? {\n  ...estadoAnterior,\n  currentStep: estadoAtualizado.currentStep ?? estadoAnterior.currentStep,\n  isCompleted: estadoAtualizado.isCompleted ?? false,\n  answers: {\n    mood:           estadoAtualizado.mood           ?? estadoAnterior.answers?.mood           ?? null,\n    completedTasks: estadoAtualizado.completedTasks ?? estadoAnterior.answers?.completedTasks ?? [],\n    rest:           estadoAtualizado.rest           ?? estadoAnterior.answers?.rest           ?? null,\n    bottleneck:     estadoAtualizado.bottleneck     ?? estadoAnterior.answers?.bottleneck     ?? null,\n    gratitude:      estadoAtualizado.gratitude      ?? estadoAnterior.answers?.gratitude      ?? null\n  },\n  // Campos extras do JSON do prompt original\n  totalTasks:           estadoAtualizado.totalTasks           ?? estadoAnterior.totalTasks           ?? 0,\n  completedTasksCount:  estadoAtualizado.completedTasksCount  ?? estadoAnterior.completedTasksCount  ?? 0,\n  completionRateDaily:  estadoAtualizado.completionRateDaily  ?? estadoAnterior.completionRateDaily  ?? 0,\n  botFinalMessage:      estadoAtualizado.botFinalMessage      ?? estadoAnterior.botFinalMessage      ?? null\n} : estadoAnterior;\n\nreturn [{\n  json: {\n    phone:        $('Parse do estado').item.json.phone,\n    evo_url:      $('Parse do estado').item.json.evo_url,\n    evo_instance: $('Parse do estado').item.json.evo_instance,\n    evo_api_key:  $('Parse do estado').item.json.evo_api_key,\n    userName:     $('Parse do estado').item.json.userName,\n    mensagem:     mensagem,\n    estadoFinal:  estadoFinal,\n    isCompleted:  estadoFinal.isCompleted ?? false,\n    // Passa o JSON completo do agente para salvar no Firestore\n    checkinPayload: estadoAtualizado\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -416,
+        496
+      ],
+      "id": "a6c65746-7427-471c-8697-81dbd77eb3cd",
+      "name": "Extrai mensagem + estado do agente"
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "=alba:checkin_state:{{ $json.phone }}",
+        "value": "={{ JSON.stringify($json.estadoFinal) }}",
+        "expire": true,
+        "ttl": 21600
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        512
+      ],
+      "id": "16a53757-fe3a-4229-be04-1acd6c450a88",
+      "name": "Atualiza estado no Redis",
+      "credentials": {
+        "redis": {
+          "id": "wUEOI98T5f8vtlQQ",
+          "name": "Redis mentoria"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://evo.healthsyncai.com.br/message/sendText/HealthSyncA",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "=15D38C7C2CB7-4121-AEDA-B8ECD60FEAEC"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $json.phone }}\",\n  \"text\": {{ JSON.stringify($json.mensagem) }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        0,
+        512
+      ],
+      "id": "37a20425-f6d9-4cd4-873e-4844fb4aa3b2",
+      "name": "Envia resposta ao usuário"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.isCompleted }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "id": "669bdfbc-515f-4422-a4bc-4645bf12cdac"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        240,
+        512
+      ],
+      "id": "1af4b3d9-c148-4807-9004-6969ec2ef292",
+      "name": "Check-in completo?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst estado = item.estadoFinal;\nconst payload = item.checkinPayload ?? {};\nconst a = estado.answers ?? {};\nconst totalTasks = payload.totalTasks ?? (estado.dailyTasks ?? []).length;\nconst completedCount = payload.completedTasksCount ?? (a.completedTasks ?? []).length;\n\n// Usa o JSON completo retornado pelo agente como base\n// e complementa com campos que o agente pode não ter preenchido\nconst checkinDoc = {\n  userId:              payload.userId              ?? estado.userId ?? item.phone,\n  userName:            payload.userName            ?? estado.userName ?? item.userName,\n  date:                payload.date                ?? estado.date ?? new Date().toISOString().split('T')[0],\n  currentStep:         'closing',\n  isCompleted:         true,\n  mood:                payload.mood                ?? a.mood ?? null,\n  completedTasks:      payload.completedTasks      ?? a.completedTasks ?? [],\n  totalTasks:          totalTasks,\n  completedTasksCount: completedCount,\n  completionRateDaily: totalTasks > 0 ? completedCount / totalTasks : 0,\n  rest:                payload.rest                ?? a.rest ?? null,\n  bottleneck:          payload.bottleneck          ?? a.bottleneck ?? null,\n  gratitude:           payload.gratitude           ?? a.gratitude ?? null,\n  botFinalMessage:     payload.botFinalMessage      ?? item.mensagem ?? null,\n  source:              'whatsapp',\n  createdAt:           new Date().toISOString()\n};\n\nreturn [{ json: { ...item, checkinDoc } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        400
+      ],
+      "id": "cc7b3868-f8ba-4d3a-a2df-ab12dc60bfb1",
+      "name": "Monta documento do check-in"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "projectId": "alba-1e168",
+        "collection": "=Users/{{ $json.phone }}/checkins",
+        "columns": "={{ JSON.stringify($json.checkinDoc) }}"
+      },
+      "type": "n8n-nodes-base.googleFirebaseCloudFirestore",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        400
+      ],
+      "id": "82977121-14b1-4020-8d13-9d6d93575b5e",
+      "name": "Salva check-in no Firestore",
+      "credentials": {
+        "googleFirebaseCloudFirestoreOAuth2Api": {
+          "id": "ymvhjRpIIFNIGvGB",
+          "name": "Google Firebase Cloud Firestore account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "key": "=alba:checkin_state:{{ $('Monta documento do check-in').item.json.phone }}"
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        960,
+        400
+      ],
+      "id": "7333abcf-0cc7-4dea-aa28-90fedd0ee6b4",
+      "name": "Remove estado do Redis",
+      "credentials": {
+        "redis": {
+          "id": "wUEOI98T5f8vtlQQ",
+          "name": "Redis mentoria"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "key": "=alba:checkin_ativo:{{ $('Monta documento do check-in').item.json.phone }}"
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        400
+      ],
+      "id": "38aa89ed-aba2-4398-ac18-7efc1d9d0420",
+      "name": "Remove flag checkin_ativo",
+      "credentials": {
+        "redis": {
+          "id": "wUEOI98T5f8vtlQQ",
+          "name": "Redis mentoria"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "key": "=alba:checkin_chat:{{ $('Monta documento do check-in').item.json.phone }}"
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        400
+      ],
+      "id": "7b2f9b83-62f7-46bc-99ee-fb822928af40",
+      "name": "Remove memória do chat",
+      "credentials": {
+        "redis": {
+          "id": "wUEOI98T5f8vtlQQ",
+          "name": "Redis mentoria"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const entrada = $('Entrada do sub-workflow').first()?.json ?? {};\nconst redisRaw = $input.first()?.json ?? {};\n\n// Redis pode retornar o valor em propriedades diferentes dependendo da versão\nconst raw = redisRaw.estado ?? redisRaw.value ?? redisRaw.data ?? null;\n\nlet estado;\ntry {\n  estado = typeof raw === 'string' ? JSON.parse(raw) : (raw ?? {});\n} catch(e) {\n  estado = {};\n}\n\n// Garante estrutura mínima caso Redis esteja vazio ou chave não exista\nif (!estado || typeof estado !== 'object') {\n  estado = {};\n}\n\nestado.currentStep  = estado.currentStep  ?? 'start';\nestado.answers      = estado.answers      ?? {};\nestado.dailyTasks   = estado.dailyTasks   ?? [];\nestado.isCompleted  = estado.isCompleted  ?? false;\nestado.userId       = estado.userId       ?? entrada.phone ?? '';\nestado.userName     = estado.userName     ?? entrada.userName ?? 'Estudante';\nestado.date         = estado.date         ?? new Date().toISOString().split('T')[0];\n\nreturn [{\n  json: {\n    phone:              entrada.phone        ?? '',\n    userMessage:        entrada.userMessage  ?? '',\n    userName:           entrada.userName     ?? estado.userName,\n    evo_url:            entrada.evo_url      ?? '',\n    evo_instance:       entrada.evo_instance ?? '',\n    evo_api_key:        entrada.evo_api_key  ?? '',\n    estado:             estado,\n    // Campos flat para o system prompt\n    userId:             estado.userId,\n    date:               estado.date,\n    dailyTasksStr:      JSON.stringify(estado.dailyTasks),\n    currentStep:        estado.currentStep,\n    currentAnswersStr:  JSON.stringify(estado.answers)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1200,
+        512
+      ],
+      "id": "ed85dfa1-cba7-4419-8f7a-82e0da7e1065",
+      "name": "Parse do estado",
+      "notes": "Substitua o nó 'Parse do estado' no Alba_Checkin_Flow pelo conteúdo deste nó."
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Entrada do sub-workflow": {
+      "main": [
+        [
+          {
+            "node": "Lê estado do Redis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lê estado do Redis": {
+      "main": [
+        [
+          {
+            "node": "Parse do estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepara entrada do agente": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - Checkin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model - Checkin": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent - Checkin",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Chat Memory - Checkin": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent - Checkin",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - Checkin": {
+      "main": [
+        [
+          {
+            "node": "Extrai mensagem + estado do agente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrai mensagem + estado do agente": {
+      "main": [
+        [
+          {
+            "node": "Atualiza estado no Redis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atualiza estado no Redis": {
+      "main": [
+        [
+          {
+            "node": "Envia resposta ao usuário",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia resposta ao usuário": {
+      "main": [
+        [
+          {
+            "node": "Check-in completo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check-in completo?": {
+      "main": [
+        [
+          {
+            "node": "Monta documento do check-in",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta documento do check-in": {
+      "main": [
+        [
+          {
+            "node": "Salva check-in no Firestore",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salva check-in no Firestore": {
+      "main": [
+        [
+          {
+            "node": "Remove estado do Redis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove estado do Redis": {
+      "main": [
+        [
+          {
+            "node": "Remove flag checkin_ativo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove flag checkin_ativo": {
+      "main": [
+        [
+          {
+            "node": "Remove memória do chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse do estado": {
+      "main": [
+        [
+          {
+            "node": "Prepara entrada do agente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "01d5987f-4d84-4b5b-815b-63b9cd5419a9",
+  "meta": {
+    "instanceId": "a0e9a37c10519fc451dec97eefe285ad1a2ae1eb86c7231b24ef90a2a3b99e9b"
+  },
+  "id": "65wZM5LWccGcQus1",
+  "tags": [
+    {
+      "updatedAt": "2026-04-28T15:20:04.358Z",
+      "createdAt": "2026-04-28T15:20:04.358Z",
+      "id": "djHAkYIao8Tl8MzD",
+      "name": "patch"
+    },
+    {
+      "updatedAt": "2026-04-24T13:48:42.469Z",
+      "createdAt": "2026-04-24T13:48:42.469Z",
+      "id": "SLHMzMrDU4XhJtNI",
+      "name": "checkin"
+    }
+  ]
+}
