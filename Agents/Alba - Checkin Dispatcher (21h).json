@@ -1,0 +1,416 @@
+{
+  "name": "Alba - Checkin Dispatcher (21h)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 21
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        5392,
+        2288
+      ],
+      "id": "4ba34016-68da-4cc3-9513-97125a75b475",
+      "name": "Cron 21h diário"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "evo-url",
+              "name": "evo_url",
+              "value": "=https://evo.healthsyncai.com.br",
+              "type": "string"
+            },
+            {
+              "id": "evo-instance",
+              "name": "evo_instance",
+              "value": "HealthSyncA",
+              "type": "string"
+            },
+            {
+              "id": "evo-key",
+              "name": "evo_api_key",
+              "value": "15D38C7C2CB7-4121-AEDA-B8ECD60FEAEC",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        5632,
+        2288
+      ],
+      "id": "6244e49d-75d7-409a-a63e-17ec4e69fc40",
+      "name": "Config EVO"
+    },
+    {
+      "parameters": {
+        "url": "https://firestore.googleapis.com/v1/projects/alba-1e168/databases/(default)/documents/Users",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleFirebaseCloudFirestoreOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "pageSize",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        5872,
+        2288
+      ],
+      "id": "b3ab3bbf-e9f2-4cb3-9e7e-6482a7ce34c9",
+      "name": "Listar usuários (REST API)",
+      "credentials": {
+        "googleFirebaseCloudFirestoreOAuth2Api": {
+          "id": "ymvhjRpIIFNIGvGB",
+          "name": "Google Firebase Cloud Firestore account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const docs = $input.first().json.documents ?? [];\nif (docs.length === 0) return [];\nreturn docs.map(doc => {\n  const phone = doc.name.split('/').pop();\n  const fields = doc.fields ?? {};\n  const getStr = (f) => f?.stringValue ?? f?.integerValue ?? null;\n  return {\n    json: {\n      id: phone,\n      phone: phone,\n      nome: getStr(fields.nome) ?? getStr(fields.name) ?? 'Estudante'\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6112,
+        2288
+      ],
+      "id": "070c78ba-0f9b-49ff-a7c1-16a18c7e85c4",
+      "name": "Normaliza usuários"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        6352,
+        2288
+      ],
+      "id": "9fdc787d-b68c-4742-9de1-7ae6604e0bfc",
+      "name": "Loop por usuário"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "set-phone",
+              "name": "phone",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "set-name",
+              "name": "userName",
+              "value": "={{ $json.nome }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        6592,
+        2288
+      ],
+      "id": "8622b7b5-093f-4d1f-93c7-7cae23d55e20",
+      "name": "Dados do usuário"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://firestore.googleapis.com/v1/projects/alba-1e168/databases/(default)/documents:runQuery",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleFirebaseCloudFirestoreOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"structuredQuery\": {\n    \"from\": [{ \"collectionId\": \"Metas\" }],\n    \"where\": {\n      \"compositeFilter\": {\n        \"op\": \"AND\",\n        \"filters\": [\n          { \"fieldFilter\": { \"field\": { \"fieldPath\": \"user_id\" }, \"op\": \"EQUAL\", \"value\": { \"stringValue\": \"{{ $json.phone }}\" } } },\n          { \"fieldFilter\": { \"field\": { \"fieldPath\": \"status\" }, \"op\": \"EQUAL\", \"value\": { \"stringValue\": \"ativa\" } } }\n        ]\n      }\n    }\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        6832,
+        2288
+      ],
+      "id": "81c13381-6b41-4851-b6af-b4c1434630fd",
+      "name": "Buscar metas ativas (REST API)",
+      "credentials": {
+        "googleFirebaseCloudFirestoreOAuth2Api": {
+          "id": "ymvhjRpIIFNIGvGB",
+          "name": "Google Firebase Cloud Firestore account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = $input.all().map(i => i.json);\nconst usuario = $('Dados do usuário').item.json;\nconst agora = new Date();\nconst dateStr = agora.toISOString().split('T')[0];\n\nconst metas = results\n  .filter(r => r.document)\n  .map(r => {\n    const doc = r.document;\n    const id = doc.name.split('/').pop();\n    const f = doc.fields ?? {};\n    const getStr = (field) => field?.stringValue ?? null;\n    return { id, titulo: getStr(f.titulo), categoria: getStr(f.categoria), prazo: getStr(f.prazo) };\n  })\n  .filter(m => m.titulo);\n\nconst estadoCheckin = {\n  currentStep: 'mood',\n  date: dateStr,\n  userName: usuario.userName,\n  userId: usuario.phone,\n  dailyTasks: metas,\n  answers: { mood: null, completedTasks: [], rest: null, bottleneck: null, gratitude: null },\n  isCompleted: false\n};\n\nreturn [{ json: { phone: usuario.phone, userName: usuario.userName, date: dateStr, dailyTasks: metas, estadoCheckin: JSON.stringify(estadoCheckin) } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7072,
+        2288
+      ],
+      "id": "57e8d658-5d11-4de6-9617-6be65eace444",
+      "name": "Normaliza metas + monta estado"
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "=alba:checkin_state:{{ $json.phone }}",
+        "value": "={{ $json.estadoCheckin }}",
+        "expire": true,
+        "ttl": 21600
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        7312,
+        2288
+      ],
+      "id": "5ca72a6b-38c1-41c9-bf88-1f391a72e89d",
+      "name": "Salva estado no Redis (TTL 6h)",
+      "credentials": {
+        "redis": {
+          "id": "wUEOI98T5f8vtlQQ",
+          "name": "Redis mentoria"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "=alba:checkin_ativo:{{ $json.phone }}",
+        "value": "true",
+        "expire": true,
+        "ttl": 21600
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        7552,
+        2288
+      ],
+      "id": "fb93f675-6483-4adb-a546-9613fea3c127",
+      "name": "Seta flag checkin_ativo (TTL 6h)",
+      "credentials": {
+        "redis": {
+          "id": "wUEOI98T5f8vtlQQ",
+          "name": "Redis mentoria"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config EVO').item.json.evo_url }}/message/sendText/{{ $('Config EVO').item.json.evo_instance }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Config EVO').item.json.evo_api_key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Normaliza metas + monta estado').item.json.phone }}\",\n  \"text\": \"Oi, {{ $('Normaliza metas + monta estado').item.json.userName }}! ✨\\nPronta para nossa checagem rápida de fim de dia? 💙\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        8752,
+        2288
+      ],
+      "id": "16873204-7f45-4edd-a9e2-a0a360fe3431",
+      "name": "Envia mensagem de início"
+    },
+    {
+      "parameters": {
+        "content": "## 🚀 DISPATCHER v3\n- Fix: coleção Users (maiúsculo)\n- Fix: description nas rows do sendList",
+        "width": 360,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        5376,
+        1968
+      ],
+      "typeVersion": 1,
+      "id": "5ba91429-6e25-4918-b6c3-901d4cf9bcba",
+      "name": "Nota v3"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cron 21h diário": {
+      "main": [
+        [
+          {
+            "node": "Config EVO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config EVO": {
+      "main": [
+        [
+          {
+            "node": "Listar usuários (REST API)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Listar usuários (REST API)": {
+      "main": [
+        [
+          {
+            "node": "Normaliza usuários",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normaliza usuários": {
+      "main": [
+        [
+          {
+            "node": "Loop por usuário",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop por usuário": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Dados do usuário",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dados do usuário": {
+      "main": [
+        [
+          {
+            "node": "Buscar metas ativas (REST API)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar metas ativas (REST API)": {
+      "main": [
+        [
+          {
+            "node": "Normaliza metas + monta estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normaliza metas + monta estado": {
+      "main": [
+        [
+          {
+            "node": "Salva estado no Redis (TTL 6h)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salva estado no Redis (TTL 6h)": {
+      "main": [
+        [
+          {
+            "node": "Seta flag checkin_ativo (TTL 6h)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seta flag checkin_ativo (TTL 6h)": {
+      "main": [
+        [
+          {
+            "node": "Envia mensagem de início",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia mensagem de início": {
+      "main": [
+        [
+          {
+            "node": "Loop por usuário",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "09a5046b-19ff-4c1a-91a0-da0fce009cb4",
+  "meta": {
+    "instanceId": "a0e9a37c10519fc451dec97eefe285ad1a2ae1eb86c7231b24ef90a2a3b99e9b"
+  },
+  "id": "J1zD99d78wYoQQDM",
+  "tags": [
+    {
+      "updatedAt": "2026-04-24T13:48:42.469Z",
+      "createdAt": "2026-04-24T13:48:42.469Z",
+      "id": "SLHMzMrDU4XhJtNI",
+      "name": "checkin"
+    }
+  ]
+}
